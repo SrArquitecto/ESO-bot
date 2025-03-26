@@ -1,0 +1,115 @@
+import unittest
+import cv2
+from datetime import datetime
+from yolo_model import YoloModel  # Asegúrate de que la clase YoloModel esté en yolo_model.py
+
+class TestYoloModel(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        """
+        Configuración inicial, esta función se ejecuta una sola vez antes de todas las pruebas.
+        """
+        modelo_ruta = "./det.pt"  # Asegúrate de que el modelo esté en la ruta correcta
+        cls.yolo = YoloModel(modelo_ruta)
+
+    def test_inferencia(self):
+        """
+        Prueba que la inferencia devuelve resultados.
+        """
+        imagen = cv2.imread("./test.jpg")  # Ruta a una imagen de prueba
+        self.assertIsNotNone(imagen, "La imagen no se cargó correctamente.")
+        
+        self.yolo.inferencia(imagen)
+        resultados = self.yolo.obtener_resultados()
+        
+        self.assertIsNotNone(resultados, "La inferencia no devolvió resultados.")
+        print("Resultados de la inferencia:", resultados)
+
+    def test_obtener_detecciones(self):
+        """
+        Prueba que obtener_detecciones devuelve detecciones válidas.
+        """
+        imagen = cv2.imread("./test.jpg")
+        self.assertIsNotNone(imagen, "La imagen no se cargó correctamente.")
+        
+        self.yolo.inferencia(imagen)
+        detecciones = self.yolo.obtener_detecciones(dibujar=False)
+
+        self.assertGreater(len(detecciones), 0, "No se encontraron detecciones.")
+        print("Detecciones obtenidas:", detecciones)
+
+    def test_obtener_mas_grande(self):
+        """
+        Prueba que obtener_mas_grande devuelve la detección más grande.
+        """
+        imagen = cv2.imread("./test.jpg")
+        self.assertIsNotNone(imagen, "La imagen no se cargó correctamente.")
+        
+        self.yolo.inferencia(imagen)
+        deteccion_grande = self.yolo.obtener_mas_grande(dibujar=False)
+
+        self.assertGreater(len(deteccion_grande), 0, "No se encontró una detección más grande.")
+        print("Detección más grande:", deteccion_grande)
+
+    def test_iniciar_y_actualizar_tracker(self):
+        """
+        Prueba que el tracker se inicia y actualiza correctamente.
+        """
+        imagen = cv2.imread("./test.jpg")
+        self.assertIsNotNone(imagen, "La imagen no se cargó correctamente.")
+        
+        self.yolo.inferencia(imagen)
+        detecciones = self.yolo.obtener_detecciones(dibujar=False)
+        
+        self.assertGreater(len(detecciones), 0, "No se encontraron detecciones.")
+        
+        # Tomamos la primera detección para iniciar el tracker
+        nodo = detecciones[0]
+        bbox_iniciado = self.yolo.iniciar_tracker(nodo)
+        self.assertIsNotNone(bbox_iniciado, "El tracker no se inició correctamente.")
+        print(f"Tracker iniciado con bbox: {bbox_iniciado}")
+        
+        # Actualizamos el tracker con la imagen
+        visto, bbox_actualizado = self.yolo.actualizar_tracker(imagen)
+        self.assertTrue(visto, "El tracker no pudo actualizar la detección.")
+        print(f"Tracker actualizado: Visto={visto}, bbox={bbox_actualizado}")
+
+    def test_guardar_deteciones(self):
+        """
+        Prueba que las detecciones se guardan correctamente en un archivo.
+        """
+        imagen = cv2.imread("./test.jpg")
+        self.assertIsNotNone(imagen, "La imagen no se cargó correctamente.")
+        
+        self.yolo.inferencia(imagen)
+        detecciones = self.yolo.obtener_detecciones(dibujar=False)
+        tstamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.yolo.guardar_deteciones(tstamp)
+
+        # Verificar si el archivo ha sido creado
+        archivo_guardado = f"./train/detecciones/{tstamp}.txt"
+        self.assertTrue(os.path.exists(archivo_guardado), f"El archivo de detecciones no fue guardado: {archivo_guardado}")
+        print(f"Detecciones guardadas en {archivo_guardado}")
+
+    def test_dibujar_cajas(self):
+        """
+        Prueba que las cajas se dibujan correctamente en la imagen.
+        """
+        imagen = cv2.imread("ruta/a/tu/imagen.jpg")
+        self.assertIsNotNone(imagen, "La imagen no se cargó correctamente.")
+        
+        self.yolo.inferencia(imagen)
+        detecciones = self.yolo.obtener_detecciones(dibujar=True)
+
+        # Verifica si la imagen con las cajas se muestra correctamente
+        self.assertIsNotNone(self.yolo.imagen_resultados, "La imagen con las cajas no fue generada.")
+        print("Imagen con cajas dibujadas generada.")
+        
+        # Mostrar la imagen para inspección manual (esto podría no ser necesario en un entorno automático)
+        cv2.imshow("Imagen con Detecciones", self.yolo.imagen_resultados)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    unittest.main()

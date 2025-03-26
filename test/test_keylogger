@@ -1,0 +1,60 @@
+import unittest
+import os
+from keylogger import KeyLogger  # Asegúrate de importar correctamente la clase
+from unittest.mock import MagicMock
+
+class TestKeyLogger(unittest.TestCase):
+
+    def setUp(self):
+        self.logger = KeyLogger(output_dir="test_output")
+
+    def tearDown(self):
+        # Limpieza de archivos generados en la prueba
+        for file in os.listdir("test_output"):
+            os.remove(os.path.join("test_output", file))
+        os.rmdir("test_output")
+
+    def test_output_directory_creation(self):
+        self.assertTrue(os.path.exists("test_output"))
+
+    def test_on_press(self):
+        self.logger.on_press("a")
+        self.assertIn("a", self.logger.held_keys)
+
+        self.logger.on_press("b")
+        self.assertIn("b", self.logger.held_keys)
+
+    def test_on_release(self):
+        self.logger.on_press("a")
+        self.logger.on_release("a")
+        self.assertNotIn("a", self.logger.held_keys)
+
+    def test_on_click(self):
+        self.logger.on_click(100, 100, "left", True)
+        self.assertIn("LMB", self.logger.mouse_buttons)
+
+        self.logger.on_click(200, 200, "right", True)
+        self.assertIn("RMB", self.logger.mouse_buttons)
+
+    def test_on_move(self):
+        self.logger.on_move(300, 400)
+        self.assertEqual(self.logger.last_mouse_position, "(300, 400)")
+
+    def test_save_keys(self):
+        self.logger.on_press("a")
+        self.logger.on_click(100, 100, "left", True)
+        self.logger.on_move(200, 200)
+
+        self.logger.save_keys()
+
+        files = os.listdir("test_output")
+        self.assertEqual(len(files), 1)
+
+        with open(os.path.join("test_output", files[0]), "r") as f:
+            content = f.read().strip()
+            self.assertIn("(a)", content)
+            self.assertIn("(LMB)", content)
+            self.assertIn("(200, 200)", content)
+
+if __name__ == "__main__":
+    unittest.main()
