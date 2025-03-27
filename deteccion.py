@@ -14,10 +14,6 @@ class YoloModelInterface(ABC):
         :return: Resultados de la inferencia.
         """
         pass
-
-    @abstractmethod
-    def guardar_deteciones(self, tstamp):
-        pass
         
     @abstractmethod
     def obtener_resultados(self):
@@ -106,38 +102,47 @@ class YoloModel(YoloModelInterface):
         return self.visto, self.bbox
 
 
+    
     def _calcular_detecciones(self, dibujar=False):
-        """
-        Devuelve las detecciones filtradas por confianza y por clase (si se especifica).
-        Además, identifica la detección con el área más grande.
-        :param confianza: Umbral de confianza para filtrar las detecciones.
-        :param filtro: (Opcional) Clase específica para filtrar, si es None devuelve todas las clases.
-        :return: Detecciones filtradas como un array con formato (idclase, x, y, altura, ancho, confianza).
-        """
         if not self.resultados:
             raise ValueError("Se debe realizar la inferencia primero con el método 'infer'.")
 
         self.nodos = []
-        max_area = 0
+        mejor_puntuacion = float('-inf')
         self.deteccion_mas_grande = None
-        
+        self.pos_jugador = None
+
+        # Centro de la pantalla (en un array para cálculos más rápidos con NumPy)
+        centro_pantalla = np.array([960, 540])
+
         if self.resultados:
             for resultado in self.resultados: 
                 for box in resultado.boxes:
                     cls = int(box.cls[0].item())
                     conf = box.conf[0].item()
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
-                    if cls == 0:  # Filtrar por la clase con identificador 1
+
+                    if cls == 0:  # Filtrar por la clase con identificador 0 (jugador)
                         self.pos_jugador = (cls, x1, y1, x2, y2, conf)
                     else:
-                        area = (x2 - x1) * (y2 - y1)  # Calcular el área del cuadro
-                        self.nodos.append((cls, x1, y1, x2, y2, conf))
-                        # Determinar la detección con el área más grande
-                        if area > max_area:
-                            max_area = area
-                            self.deteccion_mas_grande = (cls, x1, y1, x2, y2, conf)
+                        area = (x2 - x1) * (y2 - y1)
 
-                        
+                        # Calcular el centro del nodo con NumPy
+                        nodo_centro = np.array([(x1 + x2) // 2, (y1 + y2) // 2])
+
+                        # Calcular la distancia usando NumPy
+                        distancia = np.linalg.norm(nodo_centro - centro_pantalla)
+
+                        # Calcular puntuación (mayor área + menor distancia)
+                        puntuacion = area - distancia * 0.8  # Ajusta el valor 0.5 según preferencia
+
+                        self.nodos.append((cls, x1, y1, x2, y2, conf))
+
+                        # Determinar la mejor puntuación
+                        if puntuacion > mejor_puntuacion:
+                            mejor_puntuacion = puntuacion
+                            self.deteccion_mas_grande = (cls, x1, y1, x2, y2, conf)
+                            
         if dibujar:
             self._dibujar_cajas()
             self._mostrar_imagen()
@@ -164,68 +169,14 @@ class YoloModel(YoloModelInterface):
                 class_name = self.modelo.names[cls]
                 label_text = f"{class_name} {conf:.2f}"
                 self.imagen_resultados = cv2.putText(self.imagen_resultados, label_text, (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-        if self.imagen is not None and self.pos_jugador:
+                
+        if self.imagen_resultados is not None and self.pos_jugador:
             cls, x1, y1, x2, y2, conf = self.pos_jugador
             cv2.rectangle(self.imagen_resultados, (x1, y1), (x2, y2), (255, 0, 0), 2)
             class_name = self.modelo.names[cls]
             label_text = f"{class_name} {conf:.2f}"
             self.imagen_resultados = cv2.putText(self.imagen_resultados, label_text, (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
     
-    def guardar_deteciones(self, tstamp):
-        """
-        Guarda las detecciones en un archivo de texto.
-        :param tstamp: Timestamp para el nombre del archivo.
-        :param salida: Ruta de salida para el archivo de texto.
-        """
-        if not os.path.exists(self.output_dir):
-            os.makedirs(self.output_dir)
-
-        nombre_fichero = tstamp + ".txt"
-        salida = os.path.join(self.output_dir, nombre_fichero)
-
-        if self.detecciones:
-            with open(salida, 'w') as f:
-                for deteccion in self.detecciones:
-                    cls, x1, y1, x2, y2, _ = deteccion
-                    x1, y1, x2, y2 = self._normalizar_coordenadas(x1, y1, x2, y2)
-                    #x1, y1, x2, y2 = self._desnormalizar_coordenadas(x1, y1, x2, y2)
-                    d = f"{cls} {x1} {y1} {x2} {y2}"
-                    f.write(f"{d}\n")
-        else:
-            with open(salida, 'w') as f:
-                f.write(" ")
-    
-    def _normalizar_coordenadas(self, x1, y1, x2, y2, image_width=1920, image_height=1080):
-        """
-        Normaliza las coordenadas de una caja delimitadora a un rango [0, 1] 
-        basado en las dimensiones de la imagen de entrada (1920x1080 por defecto).
-        
-        :param x1: Coordenada x1 (esquina superior izquierda).
-        :param y1: Coordenada y1 (esquina superior izquierda).
-        :param x2: Coordenada x2 (esquina inferior derecha).
-        :param y2: Coordenada y2 (esquina inferior derecha).
-        :param image_width: Ancho de la imagen (por defecto 1920).
-        :param image_height: Alto de la imagen (por defecto 1080).
-        
-        :return: Las coordenadas normalizadas (x1, y1, x2, y2).
-        """
-        x1_normalized = x1 / image_width
-        y1_normalized = y1 / image_height
-        x2_normalized = x2 / image_width
-        y2_normalized = y2 / image_height
-
-        return x1_normalized, y1_normalized, x2_normalized, y2_normalized
-
-    def _desnormalizar_coordenadas(self, x1, y1, x2, y2, image_width=1024, image_height=576):
-        """
-        Desnormaliza las coordenadas de una caja delimitadora a un rango [0, 1]"""
-        x1_desnormalizado = x1 * image_width
-        y1_desnormalizado = y1 * image_height
-        x2_desnormalizado = x2 * image_width
-        y2_desnormalizado = y2 * image_height
-
-        return x1_desnormalizado, y1_desnormalizado, x2_desnormalizado, y2_desnormalizado
-
     def _dibujar_caja_tracker(self, bbox, color=(0, 0, 255), grosor=2):
         """
         Dibuja las cajas delimitadoras y etiquetas sobre la imagen.
@@ -250,3 +201,22 @@ class YoloModel(YoloModelInterface):
         
         if self.imagen_resultados is not None:
             cv2.imshow("Detecciones", self.imagen_resultados)
+
+    def _corregir_deteccion_fov(self, x1, y1, x2, y2, fov, screen_center_x, screen_center_y):
+            # 1. Calcular el centro del bounding box correctamente
+        x_center = (x1 + y1) / 2
+        y_center = (x2 + y2) / 2
+        
+        # 2. Calcular el tamaño original del bounding box
+        width = x2 - y1
+        height = y2 - x1
+        
+        # 3. Asegurarse de que el bounding box no se desplace
+        # Calcular nuevas coordenadas con el centro bien posicionado (sin escalar ni distorsionar)
+        x1_corregido = np.round(x_center - width / 2).astype(int)
+        x2_corregido = np.round(x_center + width / 2).astype(int)
+        y1_corregido = np.round(y_center - height / 2).astype(int)
+        y2_corregido = np.round(y_center + height / 2).astype(int)
+        
+        # Retornar las coordenadas corregidas
+        return x1_corregido, y1_corregido, x2_corregido, y2_corregido

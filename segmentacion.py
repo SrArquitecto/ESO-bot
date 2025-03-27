@@ -58,17 +58,6 @@ class BinaryMaskGenerator(MaskGeneratorInterface):
         
         self._generar_mascara(dibujar)
 
-
-    def _generar_mascara(self, dibujar=False):
-        """
-        Genera una imagen binaria a partir de las detecciones de máscaras YOLO.
-        :param detecciones: Resultados de segmentación del modelo YOLO.
-        :param confianza: Umbral mínimo de confianza para incluir una máscara.
-        :return: Imagen binaria en formato numpy array.
-        """
-    # Acumulador para las máscaras
-        self.mascaras = []
-        
         # Iteramos sobre los resultados de segmentación
     def _generar_mascara(self, dibujar=False):
         """

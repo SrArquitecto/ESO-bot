@@ -8,7 +8,7 @@ from pynput import keyboard
 from datetime import datetime
 from deteccion import YoloModelInterface, YoloModel
 from segmentacion import MaskGeneratorInterface, BinaryMaskGenerator
-from keylogger import KeyLogger, KeyLoggerInterface
+from mapa import Mapa
 
 class Control():
 
@@ -17,6 +17,7 @@ class Control():
         self.salir = False
         self.listener_thread = threading.Thread(target=self._run)
         self.listener_thread.start()
+        self.mapa = None
 
     def _on_press(self, key):
         try:
@@ -48,7 +49,8 @@ class Control():
         # Guardar la imagen redimensionada
         cv2.imwrite(f"./train/capturas/{tstamp}.jpg", imagen_redimensionada)
 
-    def iniciar(self, detector: YoloModelInterface, segmentador: MaskGeneratorInterface, keylogger: KeyLoggerInterface):
+    def iniciar(self, detector: YoloModelInterface, segmentador: MaskGeneratorInterface):
+        self.mapa = Mapa()
         start_time = time.time()
         with mss.mss() as sct:
             monitor = sct.monitors[1]
@@ -64,30 +66,33 @@ class Control():
                         imagen_bgr = cv2.cvtColor(imagen, cv2.COLOR_BGRA2BGR)
                         imagen_gray = cv2.cvtColor(imagen, cv2.COLOR_BGRA2GRAY)
                         imagen_gray = cv2.cvtColor(imagen_gray, cv2.COLOR_GRAY2BGR) 
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S%f")
+
                         print("Saving key logs...")
                         #keylogger.save_keys(timestamp)
                         #self.guardar_imagen(imagen, timestamp)
                         print("Running inference...")
-                        detector.inferencia(imagen_gray, dibujar=True)
+                        detector.inferencia(imagen_gray, dibujar=False)
                         print("Running segmentation...")
-                        segmentador.inferencia(imagen_bgr, dibujar=True)
+                        segmentador.inferencia(imagen_bgr, dibujar=False)
                         print("Saving detections...")
+                        self.mapa.run(detector, segmentador)
+                
+                            #else: self.mapa.mapa_color = np.ones((1080, 1920), dtype=np.uint8) * 255
                         #detector.guardar_deteciones(timestamp)       
                         print("Saving mask...")
                         #segmentador.guardar_mascara(timestamp)
-                        if cv2.waitKey(1) & 0xFF == ord('q'):
-                            break         # Cerrar las ventanas de OpenCV
+                    self.mapa.mostrar_mapa()
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        break         # Cerrar las ventanas de OpenCV
             cv2.destroyAllWindows()
-                #sleep(1)
+            
 
     def _run(self):
         with keyboard.Listener(on_press=self._on_press, on_release=self._on_release) as listener:
             listener.join()
-
+    
 if __name__ == "__main__":
     control = Control()
     det= YoloModel("./models/det_nodos_ESO.pt")
     seg = BinaryMaskGenerator("./models/best_seg_obs.pt")
-    key = KeyLogger()
-    control.iniciar(det, seg, key)
+    control.iniciar(det, seg)
