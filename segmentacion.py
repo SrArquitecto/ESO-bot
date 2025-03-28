@@ -95,8 +95,18 @@ class BinaryMaskGenerator(MaskGeneratorInterface):
                 mascara_acumulada = np.zeros(self.tamanio_imagen, dtype=np.uint8)
 
         self.mascara_invertida = 1 - mascara_acumulada
+        self.mascara_invertida = self.mascara_invertida
+        self._reduce_obstacle_area(1)
         if dibujar:
             self._mostrar_mascara()
+
+
+    def _reduce_obstacle_area(self, reduction_percentage=20):
+        """Reduce el área de los obstáculos en un porcentaje dado."""
+        reduction_value = int((reduction_percentage / 100) * self.mascara_invertida.shape[0])
+        kernel = np.ones((reduction_value, reduction_value), np.uint8)
+        self.mascara_invertida = cv2.erode(self.mascara_invertida, kernel, iterations=1)
+        
 
 
     def obtener_resultados(self):
@@ -124,7 +134,7 @@ class BinaryMaskGenerator(MaskGeneratorInterface):
             # Redimensionar la máscara a 1024x576 manteniendo el ratio
             
             resized_mask = cv2.resize(self.mascara_invertida, target_size, interpolation=cv2.INTER_NEAREST)
-            cv2.imwrite(salida, resized_mask * 255)
+            cv2.imwrite(salida, resized_mask)
         else:
             raise ValueError("La máscara invertida no ha sido generada. Asegúrese de que se ha ejecutado 'generar_mascara' correctamente.")
         

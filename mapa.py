@@ -3,10 +3,12 @@ from deteccion import YoloModelInterface, YoloModel
 from segmentacion import MaskGeneratorInterface, BinaryMaskGenerator
 import cv2
 import heapq
+import pyautogui
 
 class Mapa():
     def __init__(self):
         self.nodos = []
+        self.ruta_filtrada = []
         self.nodo_mas_cercano = None
         self.ruta = []
         self.mapa_color = np.ones((1080, 1920), dtype=np.uint8) * 255
@@ -33,6 +35,15 @@ class Mapa():
                     if closest_target is not None:
                         path = self.astar((960,540), closest_target)
                         self.dibujar_ruta(path)
+                        self._extraer_ruta(path)
+                        print("RUTA:")
+                        print(self.ruta)
+                        self._filter_nodes_by_distance(step=100)
+                        print("RUTA FILTRADA:")
+                        print(self.ruta_filtrada)
+                        self._draw_nodes_on_map()
+                        if len(self.ruta_filtrada) >= 2:
+                            self._align_camera_x_to_node(self.ruta_filtrada[1][0])
                     else: print("No se encontro ruta")
                     
                 else:
@@ -177,4 +188,69 @@ class Mapa():
                 start_point = (ruta[i][0], ruta[i][1])
                 end_point = (ruta[i + 1][0], ruta[i + 1][1])
                 cv2.line(self.mapa_color, start_point, end_point, (0, 255, 255), 2)
+                
 
+    def _extraer_ruta(self, ruta):
+        self.ruta = []
+        if ruta:
+            for punto in ruta:
+                self.ruta.append((punto[0], punto[1]))
+
+
+
+    # -------------------------------
+    # Filtrado de nodos
+    # -------------------------------
+    def _filter_nodes_by_distance(self, step=100):
+        self.ruta_filtrada = []
+        """Filtra los nodos para optimizar la ruta, tomando uno cada 'step' píxeles."""
+        if not self.ruta:
+            self.ruta_filtrada = []
+
+        self.ruta_filtrada = [self.ruta[0]]  # Primer nodo (posición inicial)
+        last_node = self.ruta[0]
+
+        for node in self.ruta[1:]:
+            dist = np.linalg.norm(np.array(node) - np.array(last_node))
+            if dist >= step:
+                self.ruta_filtrada.append(node)
+                last_node = node
+
+        if self.ruta_filtrada[-1] != self.ruta[-1]:
+            self.ruta_filtrada.append(self.ruta[-1])
+
+    # -------------------------------
+    # Dibujo de nodos en el mapa
+    # -------------------------------
+    def _draw_nodes_on_map(self, color=(0, 255, 0), radius=3):
+        """Dibuja los nodos filtrados en el mapa."""
+        for node in self.ruta_filtrada:
+            cv2.circle(self.mapa_color, node, radius, color, -1)
+        return self.mapa_navegacion
+
+    # -------------------------------
+    # Centrado directo de la cámara en X
+    # -------------------------------
+    def _align_camera_x_to_node(self, node_x, tolerance=5):
+        """Mueve el ratón proporcionalmente para centrar el nodo en una sola iteración."""
+        screen_width, _ = pyautogui.size()
+        center_x = screen_width // 2
+
+        delta_x = node_x - center_x
+
+        if abs(delta_x) < tolerance:
+            return  # El nodo ya está suficientemente centrado
+
+        # Movimiento proporcional directo
+        pyautogui.moveRel(delta_x, 0, duration=0.1)
+
+    # -------------------------------
+    # Comprobación de nodo fuera de la vista
+    # -------------------------------
+    def _is_node_in_view(self, node_x, margin=0.1):
+        """Verifica si el nodo está dentro de una zona segura en pantalla."""
+        screen_width, _ = pyautogui.size()
+        left_limit = screen_width * margin
+        right_limit = screen_width * (1 - margin)
+
+        return left_limit < node_x < right_limit

@@ -67,19 +67,19 @@ class Control():
                         imagen_gray = cv2.cvtColor(imagen, cv2.COLOR_BGRA2GRAY)
                         imagen_gray = cv2.cvtColor(imagen_gray, cv2.COLOR_GRAY2BGR) 
 
-                        print("Saving key logs...")
+                        #print("Saving key logs...")
                         #keylogger.save_keys(timestamp)
                         #self.guardar_imagen(imagen, timestamp)
-                        print("Running inference...")
+                        #print("Running inference...")
                         detector.inferencia(imagen_gray, dibujar=False)
-                        print("Running segmentation...")
+                        #print("Running segmentation...")
                         segmentador.inferencia(imagen_bgr, dibujar=False)
-                        print("Saving detections...")
+                        #print("Saving detections...")
                         self.mapa.run(detector, segmentador)
                 
                             #else: self.mapa.mapa_color = np.ones((1080, 1920), dtype=np.uint8) * 255
                         #detector.guardar_deteciones(timestamp)       
-                        print("Saving mask...")
+                        #print("Saving mask...")
                         #segmentador.guardar_mascara(timestamp)
                     self.mapa.mostrar_mapa()
                     if cv2.waitKey(1) & 0xFF == ord('q'):
