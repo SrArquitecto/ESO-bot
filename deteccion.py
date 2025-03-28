@@ -19,6 +19,14 @@ class YoloModelInterface(ABC):
     def obtener_resultados(self):
         pass
 
+    @abstractmethod
+    def obtener_coord_jugador(self):
+        pass
+
+    @abstractmethod
+    def obtener_coord_nodos(self):
+        pass
+
 
     @abstractmethod
     def obtener_nodos(self):
@@ -61,7 +69,7 @@ class YoloModel(YoloModelInterface):
         self.visto = None
         self.output_dir = output_dir
 
-    def inferencia(self, imagen, conf=0.5, filtro=None, dibujar=False):
+    def inferencia(self, imagen, conf=0.5, filtro=[1], dibujar=False):
         """
         Realiza la inferencia sobre una imagen de entrada utilizando el modelo YOLO.
         :param imagen: Imagen de entrada en formato numpy array.
@@ -77,6 +85,11 @@ class YoloModel(YoloModelInterface):
 
         self._calcular_detecciones(dibujar)
 
+    def obtener_coord_jugador(self):
+        return (957, 670)
+    
+    def obtener_coord_nodos(self):
+        return self.coord_nodos
 
     def obtener_resultados(self):
         return self.resultados
@@ -91,23 +104,22 @@ class YoloModel(YoloModelInterface):
         return self.pos_jugador
 
     ######LLEVAR A OTRA CLASE
-    def _iniciar_tracker(self, nodo):
+    def iniciar_tracker(self, nodo):
         _, x, y, h, w, _ = nodo
         self.bbox = (x, y, w, h)
         self.tracker.init(self.imagen, self.bbox)
         return self.bbox
     
-    def _actualizar_tracker(self, imagen):
+    def actualizar_tracker(self, imagen):
         self.visto, self.bbox = self.tracker.update(imagen)
         return self.visto, self.bbox
 
-
-    
     def _calcular_detecciones(self, dibujar=False):
         if not self.resultados:
             raise ValueError("Se debe realizar la inferencia primero con el método 'infer'.")
 
         self.nodos = []
+        self.coord_nodos = []
         mejor_puntuacion = float('-inf')
         self.deteccion_mas_grande = None
         self.pos_jugador = None
@@ -115,31 +127,48 @@ class YoloModel(YoloModelInterface):
         # Centro de la pantalla (en un array para cálculos más rápidos con NumPy)
         centro_pantalla = np.array([960, 540])
 
+        # Dimensiones de la pantalla (puedes ajustar si cambian)
+        ancho_pantalla = 1920
+        alto_pantalla = 1080
+
+        # Dividir la pantalla en tercios
+        tercio_izquierdo = ancho_pantalla // 3
+        tercio_derecho = 2 * ancho_pantalla // 3
+
         if self.resultados:
-            for resultado in self.resultados: 
+            for resultado in self.resultados:
                 for box in resultado.boxes:
                     cls = int(box.cls[0].item())
                     conf = box.conf[0].item()
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
-
+                    xn = int((x1 + x2) / 2)
+                    yn = int((y1 + y2) / 2)
                     if cls == 0:  # Filtrar por la clase con identificador 0 (jugador)
                         self.pos_jugador = (cls, x1, y1, x2, y2, conf)
+                        self.coord_jugador = (xn, yn)
                     else:
+                        # Calcular el área y el centro del nodo
                         area = (x2 - x1) * (y2 - y1)
-
-                        # Calcular el centro del nodo con NumPy
                         nodo_centro = np.array([(x1 + x2) // 2, (y1 + y2) // 2])
 
-                        # Calcular la distancia usando NumPy
+                        # Calcular la distancia euclidiana desde el centro de la pantalla
                         distancia = np.linalg.norm(nodo_centro - centro_pantalla)
 
-                        # Calcular puntuación (mayor área + menor distancia)
-                        puntuacion = area - distancia * 0.8  # Ajusta el valor 0.5 según preferencia
+                        # Ponderar la puntuación (más área y menos distancia)
+                        puntuacion =  area - distancia * 0.5
+
+                        # Penalizar los nodos que estén en los tercios laterales (izquierda o derecha)
+                        if nodo_centro[0] < tercio_izquierdo or nodo_centro[0] > tercio_derecho:
+                            puntuacion -= 100  # Penaliza con un valor adecuado
 
                         self.nodos.append((cls, x1, y1, x2, y2, conf))
+                        self.coord_nodos.append((xn, yn))
+                        # Establecer un umbral para evitar que el objeto cambie de uno a otro fácilmente
+                        umbral_proximidad = 50  # Ajusta este valor según sea necesario
 
-                        # Determinar la mejor puntuación
-                        if puntuacion > mejor_puntuacion:
+                        # Si la puntuación es mejor y el objeto no está demasiado cerca de otro objeto
+                        if puntuacion > mejor_puntuacion and (self.deteccion_mas_grande is None or
+                                np.linalg.norm(nodo_centro - np.array([self.deteccion_mas_grande[1], self.deteccion_mas_grande[2]])) > umbral_proximidad):
                             mejor_puntuacion = puntuacion
                             self.deteccion_mas_grande = (cls, x1, y1, x2, y2, conf)
                             
