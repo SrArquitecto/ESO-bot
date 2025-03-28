@@ -43,7 +43,7 @@ class Mapa():
                         print(self.ruta_filtrada)
                         self._draw_nodes_on_map()
                         if len(self.ruta_filtrada) >= 2:
-                            self._align_camera_x_to_node(self.ruta_filtrada[1][0])
+                            self._align_camera_x_to_node2(self.ruta_filtrada[1][0])
                     else: print("No se encontro ruta")
                     
                 else:
@@ -243,7 +243,13 @@ class Mapa():
 
         # Movimiento proporcional directo
         pyautogui.moveRel(delta_x, 0, duration=0.1)
+    def _align_camera_x_to_node2(self, node_x):
+        """Mueve el ratón directamente para centrar el nodo en una sola iteración."""
+        screen_width, _ = pyautogui.size()
+        center_x = screen_width // 2
 
+        # Movimiento directo en lugar de proporcional
+        pyautogui.moveTo(node_x, pyautogui.position().y)
     # -------------------------------
     # Comprobación de nodo fuera de la vista
     # -------------------------------

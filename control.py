@@ -9,6 +9,7 @@ from datetime import datetime
 from deteccion import YoloModelInterface, YoloModel
 from segmentacion import MaskGeneratorInterface, BinaryMaskGenerator
 from mapa import Mapa
+from concurrent.futures import ThreadPoolExecutor
 
 class Control():
 
@@ -47,7 +48,8 @@ class Control():
         imagen_redimensionada = cv2.resize(imagen, (nuevo_ancho, nuevo_alto))
         
         # Guardar la imagen redimensionada
-        cv2.imwrite(f"./train/capturas/{tstamp}.jpg", imagen_redimensionada)
+        with ThreadPoolExecutor() as executor:
+            executor.submit(lambda: cv2.imwrite(f"./train/capturas/{tstamp}.jpg", imagen_redimensionada))
 
     def iniciar(self, detector: YoloModelInterface, segmentador: MaskGeneratorInterface):
         self.mapa = Mapa()

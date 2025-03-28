@@ -96,16 +96,23 @@ class BinaryMaskGenerator(MaskGeneratorInterface):
 
         self.mascara_invertida = 1 - mascara_acumulada
         self.mascara_invertida = self.mascara_invertida
-        self._reduce_obstacle_area(1)
+        self._reduce_obstacle_area(10)
         if dibujar:
             self._mostrar_mascara()
 
 
     def _reduce_obstacle_area(self, reduction_percentage=20):
         """Reduce el área de los obstáculos en un porcentaje dado."""
-        reduction_value = int((reduction_percentage / 100) * self.mascara_invertida.shape[0])
+        # Calcular el tamaño del kernel proporcionalmente a ambas dimensiones
+        reduction_value = max(1, int((reduction_percentage / 100) * min(self.mascara_invertida.shape[:2]) * 0.1))
+        
+        # Crear un kernel más pequeño para mayor precisión
         kernel = np.ones((reduction_value, reduction_value), np.uint8)
-        self.mascara_invertida = cv2.erode(self.mascara_invertida, kernel, iterations=1)
+        
+        # Aplicar erosión con múltiples iteraciones en lugar de un kernel gigante
+        iterations = max(1, int(reduction_percentage / 10))
+        self.mascara_invertida = cv2.erode(self.mascara_invertida, kernel, iterations=iterations)
+
         
 
 
